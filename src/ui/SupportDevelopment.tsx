@@ -91,8 +91,8 @@ export function SupportDevelopment() {
             <p className="overline">INDEPENDENT DEVELOPMENT // PLAYER SUPPORTED</p>
             <h2 id="support-title">SUPPORT APEX <span>EVOLVE</span></h2>
             <p className="support-intro">
-              Help fund new arenas, smarter rivals, combat audio, and the public release.
-              Choose any amount—support never changes combat power.
+              Help fund new arenas, smarter rivals, multiplayer mode, combat audio, and the
+              public release. Choose any amount—support never changes combat power.
             </p>
             <div className={`support-methods ${stripePaymentLink && upiPaymentUri ? '' : 'single'}`}>
               {stripePaymentLink && (
