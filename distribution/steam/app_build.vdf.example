@@ -1,0 +1,12 @@
+"AppBuild"
+{
+  "AppID" "REPLACE_WITH_APP_ID"
+  "Desc" "APEX EVOLVE premium candidate"
+  "ContentRoot" "../../release/steam/content"
+  "BuildOutput" "../../release/steam/steampipe-output"
+  "Preview" "1"
+  "Depots"
+  {
+    "REPLACE_WITH_DEPOT_ID" "depot_build.vdf"
+  }
+}

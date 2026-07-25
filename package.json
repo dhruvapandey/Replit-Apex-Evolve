@@ -1,11 +1,23 @@
 {
   "name": "evolab-mvp",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.9.0",
+  "description": "APEX EVOLVE tactical tank combat game",
+  "author": "Dhruva Pandey",
+  "license": "UNLICENSED",
+  "main": "desktop/main.cjs",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:itch": "tsc -b && vite build --mode itch --outDir dist-itch",
+    "build:crazygames": "tsc -b && vite build --mode crazygames --outDir dist-crazygames",
+    "build:steam": "tsc -b && vite build --mode steam --outDir dist-steam",
+    "package:itch": "npm run build:itch && node scripts/package-web-release.mjs itch",
+    "package:crazygames": "npm run build:crazygames && node scripts/package-web-release.mjs crazygames",
+    "desktop:preview": "npm run build:steam && electron .",
+    "package:steam:dir": "npm run build:steam && electron-builder --dir --publish never",
+    "package:steam": "npm run build:steam && electron-builder --publish never",
     "preview": "vite preview",
     "typecheck": "tsc -b",
     "lint": "eslint .",
@@ -26,6 +38,9 @@
     "@types/qrcode": "^1.5.6",
     "@types/react": "^19.1.6",
     "@types/react-dom": "^19.1.5",
+    "archiver": "^8.0.0",
+    "electron": "^43.2.0",
+    "electron-builder": "^26.15.3",
     "eslint": "^9.28.0",
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.20",
@@ -36,5 +51,35 @@
   },
   "engines": {
     "node": ">=20"
+  },
+  "build": {
+    "appId": "com.dhruvapandey.apexevolve",
+    "productName": "APEX EVOLVE",
+    "asar": true,
+    "directories": {
+      "output": "release/steam"
+    },
+    "files": [
+      "desktop/**/*",
+      "dist-steam/**/*",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.games",
+      "target": [
+        "zip"
+      ]
+    },
+    "win": {
+      "target": [
+        "portable"
+      ]
+    },
+    "linux": {
+      "category": "Game",
+      "target": [
+        "AppImage"
+      ]
+    }
   }
 }

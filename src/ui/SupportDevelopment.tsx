@@ -5,10 +5,15 @@ import {
   normalizeUpiId,
   trackedStripePaymentLink,
 } from '../supportPayments';
+import { allowsExternalSupport } from '../distribution';
+import { trackEvent } from '../analytics';
 
-const supportEnabled = import.meta.env.VITE_SUPPORT_ENABLED !== 'false';
-const stripePaymentLink = normalizeStripePaymentLink(import.meta.env.VITE_STRIPE_DONATION_URL);
-const upiId = normalizeUpiId(import.meta.env.VITE_UPI_ID);
+const supportEnabled = allowsExternalSupport()
+  && import.meta.env.VITE_SUPPORT_ENABLED !== 'false';
+const stripePaymentLink = supportEnabled
+  ? normalizeStripePaymentLink(import.meta.env.VITE_STRIPE_DONATION_URL)
+  : null;
+const upiId = supportEnabled ? normalizeUpiId(import.meta.env.VITE_UPI_ID) : null;
 const upiPayeeName = import.meta.env.VITE_UPI_PAYEE_NAME?.trim() || 'APEX EVOLVE';
 
 export function SupportDevelopment() {
@@ -50,6 +55,7 @@ export function SupportDevelopment() {
 
   const openSupport = () => {
     if (document.pointerLockElement) void document.exitPointerLock();
+    trackEvent('support_open');
     setOpen(true);
   };
 
@@ -106,6 +112,7 @@ export function SupportDevelopment() {
                     href={trackedStripePaymentLink(stripePaymentLink, 'apex_evolve')}
                     target="_blank"
                     rel="noopener noreferrer"
+                    onClick={() => trackEvent('support_checkout_click', { payment_method: 'stripe' })}
                   >
                     CHOOSE AMOUNT <span>↗</span>
                   </a>
@@ -122,7 +129,12 @@ export function SupportDevelopment() {
                       : <span className="upi-loading">GENERATING SECURE QR…</span>}
                   </div>
                   <code>{upiId}</code>
-                  <a className="upi-deep-link" data-game-ui href={upiPaymentUri}>
+                  <a
+                    className="upi-deep-link"
+                    data-game-ui
+                    href={upiPaymentUri}
+                    onClick={() => trackEvent('support_checkout_click', { payment_method: 'upi' })}
+                  >
                     OPEN UPI APP <span>↗</span>
                   </a>
                 </article>

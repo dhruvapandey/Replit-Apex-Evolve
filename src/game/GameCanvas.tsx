@@ -163,6 +163,14 @@ export type GameHud = {
   enemyCountermeasures: boolean;
 };
 
+export type WaveCompletion = {
+  mode: CombatMode;
+  wave: number;
+  score: number;
+  livesRemaining: number;
+  elapsedSeconds: number;
+};
+
 type EnemyTactic = 'cover' | 'peek' | 'flank' | 'relocate' | 'suppress';
 
 type Enemy = {
@@ -282,7 +290,8 @@ type Props = {
   mode: CombatMode;
   active: boolean;
   onHud: (hud: GameHud) => void;
-  onGameOver: () => void;
+  onGameOver: (hud: GameHud) => void;
+  onWaveComplete: (completion: WaveCompletion) => void;
   onPlayerDamage: () => void;
   onPlayerFlash: () => void;
   onGenerationComplete: (record: GenerationRecord) => void;
@@ -484,7 +493,17 @@ function decorateTacticalCarrier(tank: THREE.Group) {
   tank.add(light);
 }
 
-export function GameCanvas({ arenaId, mode, active, onHud, onGameOver, onPlayerDamage, onPlayerFlash, onGenerationComplete }: Props) {
+export function GameCanvas({
+  arenaId,
+  mode,
+  active,
+  onHud,
+  onGameOver,
+  onWaveComplete,
+  onPlayerDamage,
+  onPlayerFlash,
+  onGenerationComplete,
+}: Props) {
   const mount = useRef<HTMLDivElement>(null);
   const activeRef = useRef(active);
   activeRef.current = active;
@@ -3350,7 +3369,7 @@ export function GameCanvas({ arenaId, mode, active, onHud, onGameOver, onPlayerD
             removeShots();
             createExplosion(player.position, 0xffffff);
             combatAudio.play('tank-destroyed', 1);
-            onHud({
+            const finalHud: GameHud = {
               mode,
               wave,
               enemies: enemies.length,
@@ -3378,9 +3397,17 @@ export function GameCanvas({ arenaId, mode, active, onHud, onGameOver, onPlayerD
               smokeGrenades,
               flashGrenades,
               enemyCountermeasures: enemies.some((enemy) => enemy.smokeGrenades + enemy.flashGrenades > 0),
-            });
-            onGameOver();
+            };
+            onHud(finalHud);
+            onGameOver(finalHud);
           } else if (enemies.length === 0) {
+            onWaveComplete({
+              mode,
+              wave,
+              score,
+              livesRemaining: lives,
+              elapsedSeconds: generationElapsed,
+            });
             if (duelMode) {
               wave += 1;
               maxLives = DUEL_STARTING_LIVES;
@@ -3405,7 +3432,7 @@ export function GameCanvas({ arenaId, mode, active, onHud, onGameOver, onPlayerD
                 livesRemaining: lives,
               });
               plateauStreak = generationRecord.plateauStreak;
-              if (import.meta.env.DEV) onGenerationComplete(generationRecord);
+              onGenerationComplete(generationRecord);
               enemyGenomes = evolution.genomes;
               mutationPercent = evolution.mutationPercent;
               wave += 1;
@@ -3666,7 +3693,16 @@ export function GameCanvas({ arenaId, mode, active, onHud, onGameOver, onPlayerD
       renderer.dispose();
       host.removeChild(renderer.domElement);
     };
-  }, [arenaId, mode, onGameOver, onGenerationComplete, onHud, onPlayerDamage, onPlayerFlash]);
+  }, [
+    arenaId,
+    mode,
+    onGameOver,
+    onGenerationComplete,
+    onHud,
+    onPlayerDamage,
+    onPlayerFlash,
+    onWaveComplete,
+  ]);
 
   return <div ref={mount} className="game-canvas" aria-label="APEX EVOLVE 3D combat arena" />;
 }
