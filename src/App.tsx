@@ -15,6 +15,7 @@ import {
   enemyCountForMode,
   type CombatMode,
 } from './game/combatMode';
+import { SupportDevelopment } from './ui/SupportDevelopment';
 
 const DEVELOPMENT_TELEMETRY = import.meta.env.DEV;
 const EVOLUTION_STORAGE_KEY = 'apex-evolve:development-telemetry:v1';
@@ -115,6 +116,7 @@ export default function App() {
         onPlayerFlash={onPlayerFlash}
         onGenerationComplete={onGenerationComplete}
       />
+      <SupportDevelopment />
       <div className="vignette" />
       <div key={`damage-${damagePulse}`} className={`damage-flash ${damagePulse > 0 ? 'hit' : ''}`} />
       <div key={`flash-${flashPulse}`} className={`enemy-flash ${flashPulse > 0 ? 'hit' : ''}`} />

@@ -15,6 +15,7 @@
     "@types/three": "^0.185.1",
     "@vitejs/plugin-react": "^4.5.2",
     "phaser": "^3.90.0",
+    "qrcode": "^1.5.4",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "three": "^0.185.1",
@@ -22,6 +23,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.28.0",
+    "@types/qrcode": "^1.5.6",
     "@types/react": "^19.1.6",
     "@types/react-dom": "^19.1.5",
     "eslint": "^9.28.0",
