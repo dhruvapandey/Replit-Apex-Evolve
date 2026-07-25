@@ -1,3 +1,8 @@
+import {
+  isPlatformAudioMuted,
+  subscribeToPlatformMute,
+} from '../platformAudio';
+
 export type CombatSound =
   | 'player-cannon'
   | 'enemy-cannon'
@@ -41,16 +46,27 @@ export function soundVolumeForDistance(distance: number, audibleDistance = 72) {
 export function createCombatAudio() {
   let context: AudioContext | null = null;
   let master: GainNode | null = null;
-  let muted = false;
+  let userMuted = false;
+  let platformMuted = isPlatformAudioMuted();
   const sampleBuffers = new Map<CombatSample, AudioBuffer>();
   const sampleRequests = new Map<CombatSample, Promise<void>>();
+  const effectiveMuted = () => userMuted || platformMuted;
+  const applyMasterVolume = () => {
+    if (context && master) {
+      master.gain.setTargetAtTime(effectiveMuted() ? 0 : 0.82, context.currentTime, 0.025);
+    }
+  };
+  const unsubscribePlatformMute = subscribeToPlatformMute((muted) => {
+    platformMuted = muted;
+    applyMasterVolume();
+  });
 
   const ensureContext = () => {
     if (context && master) return { context, master };
     try {
       context = new AudioContext();
       master = context.createGain();
-      master.gain.value = muted ? 0 : 0.82;
+      master.gain.value = effectiveMuted() ? 0 : 0.82;
       const compressor = context.createDynamicsCompressor();
       compressor.threshold.value = -16;
       compressor.knee.value = 12;
@@ -204,7 +220,7 @@ export function createCombatAudio() {
 
   const play = (sound: CombatSound, volume = 1, duration = 1.2) => {
     const level = clamp(volume, 0, 1);
-    if (muted || level <= 0) return;
+    if (effectiveMuted() || level <= 0) return;
     unlock();
 
     switch (sound) {
@@ -275,14 +291,13 @@ export function createCombatAudio() {
   };
 
   const toggleMuted = () => {
-    muted = !muted;
-    if (context && master) {
-      master.gain.setTargetAtTime(muted ? 0 : 0.82, context.currentTime, 0.025);
-    }
-    return muted;
+    userMuted = !userMuted;
+    applyMasterVolume();
+    return effectiveMuted();
   };
 
   const close = () => {
+    unsubscribePlatformMute();
     if (context) void context.close();
     context = null;
     master = null;

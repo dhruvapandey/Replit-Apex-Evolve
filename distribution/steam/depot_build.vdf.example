@@ -1,0 +1,11 @@
+"DepotBuild"
+{
+  "DepotID" "REPLACE_WITH_DEPOT_ID"
+  "ContentRoot" "../../release/steam/content"
+  "FileMapping"
+  {
+    "LocalPath" "*"
+    "DepotPath" "."
+    "recursive" "1"
+  }
+}

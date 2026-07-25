@@ -1,14 +1,8 @@
-# EvoLab MVP
+# APEX EVOLVE
 
-A browser-based evolutionary sandbox where the player designs survival challenges and watches populations adapt across generations.
-
-## Current vertical slice
-- Place food, poison, walls, and predators.
-- Spawn 20 autonomous creatures.
-- Creatures sense nearby food and hazards.
-- A simple genetic algorithm selects the top 20%, performs crossover, and mutates the next generation.
-- Inspect creature traits and fitness.
-- Run the simulation at 1×, 2×, or 5× speed.
+APEX EVOLVE is a desktop-first tactical tank combat game built with React, TypeScript, Three.js,
+and Vite. Play Evolution War against six genetically evolving specialists or enter a 1 × 1 duel
+against a rival whose arsenal escalates every round.
 
 ## Run locally
 
@@ -17,18 +11,37 @@ npm install
 npm run dev
 ```
 
-Open the URL printed by Vite.
+Open the URL printed by Vite. The game requires a keyboard and mouse.
 
-## Build
+## Validate
 
 ```bash
+npm run typecheck
+npm run lint
+npm test
 npm run build
 ```
 
-## Optional player support
+## Distribution builds
 
-The release UI can show a voluntary-support panel with Stripe Payment Links and
-an India UPI QR/deep link. Copy `.env.example` to `.env.local` and configure:
+Each target is compiled with a separate integration policy:
+
+```bash
+npm run package:itch
+npm run package:crazygames
+npm run package:steam:dir
+```
+
+- Direct web: optional Stripe/UPI support and consent-gated GA4.
+- itch.io: consent-gated GA4; itch handles donations on the game page.
+- CrazyGames: CrazyGames HTML5 v3 SDK; no external funding or Google Analytics.
+- Steam: offline Electron desktop package; no ads, web analytics, or external funding.
+
+Release instructions are in [`docs/launch`](docs/launch).
+
+## Optional direct-web support
+
+Copy `.env.example` to `.env.local` and set only public checkout details:
 
 ```bash
 VITE_SUPPORT_ENABLED=true
@@ -37,16 +50,14 @@ VITE_UPI_ID=your-upi-id@bank
 VITE_UPI_PAYEE_NAME=APEX EVOLVE
 ```
 
-Only public checkout URLs and payment identifiers belong in Vite environment
-variables. Never add a Stripe secret or restricted API key. Set
-`VITE_SUPPORT_ENABLED=false` for distribution channels that prohibit external
-payment links.
+Never put a Stripe secret key in a Vite environment variable.
 
-## Product docs
-- `docs/PRD.md`
-- `docs/ARCHITECTURE.md`
-- `docs/MILESTONES.md`
-- `prompts/01-codex-bootstrap.md`
+## Optional analytics
 
-## Important MVP constraint
-This starter uses an interpretable trait-based controller, not reinforcement learning. The genetic algorithm is the first product experiment. Neuroevolution can replace the controller only after the core loop is proven fun.
+Set a GA4 web-stream measurement ID:
+
+```bash
+VITE_GA_MEASUREMENT_ID=G-XXXXXXXXXX
+```
+
+The Google tag is not downloaded until the player explicitly allows anonymous analytics.

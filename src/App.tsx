@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { GameCanvas, type GameHud } from './game/GameCanvas';
+import {
+  GameCanvas,
+  type GameHud,
+  type WaveCompletion,
+} from './game/GameCanvas';
 import { LIVES_PER_GENERATION } from './game/progression';
 import {
   appendGenerationRecord,
@@ -16,6 +20,22 @@ import {
   type CombatMode,
 } from './game/combatMode';
 import { SupportDevelopment } from './ui/SupportDevelopment';
+import { AnalyticsConsent } from './ui/AnalyticsConsent';
+import {
+  trackArenaSelected,
+  trackGameOver,
+  trackGameStarted,
+  trackModeSelected,
+  trackWaveCompleted,
+} from './analytics';
+import {
+  crazyGamesGameplayStart,
+  crazyGamesGameplayStop,
+  crazyGamesLoadingComplete,
+  crazyGamesReportProgress,
+  isCrazyGamesActive,
+  requestCrazyGamesMidgameAd,
+} from './crazyGames';
 
 const DEVELOPMENT_TELEMETRY = import.meta.env.DEV;
 const EVOLUTION_STORAGE_KEY = 'apex-evolve:development-telemetry:v1';
@@ -48,14 +68,53 @@ export default function App() {
   const [selectedArena, setSelectedArena] = useState<ArenaId>('city-island');
   const [damagePulse, setDamagePulse] = useState(0);
   const [flashPulse, setFlashPulse] = useState(0);
+  const [adBreakActive, setAdBreakActive] = useState(false);
   const [evolutionArchive, setEvolutionArchive] = useState(() => (
     DEVELOPMENT_TELEMETRY
       ? parseEvolutionArchive(localStorage.getItem(EVOLUTION_STORAGE_KEY))
       : emptyEvolutionArchive()
   ));
   const activeEvolutionRun = useRef<string | null>(null);
+  const runStartedAt = useRef(0);
   const onHud = useCallback((next: GameHud) => setHud(next), []);
-  const onGameOver = useCallback(() => setStarted(false), []);
+  const onGameOver = useCallback((finalHud: GameHud) => {
+    const elapsedSeconds = Math.max(0, (performance.now() - runStartedAt.current) / 1000);
+    trackGameOver({
+      mode: finalHud.mode,
+      arena: selectedArena,
+      wave: finalHud.wave,
+      score: finalHud.score,
+      lives: finalHud.lives,
+      elapsedSeconds: Number(elapsedSeconds.toFixed(1)),
+    });
+    crazyGamesGameplayStop();
+    setStarted(false);
+    if (
+      isCrazyGamesActive()
+      && elapsedSeconds >= 180
+      && finalHud.wave >= 3
+    ) {
+      setAdBreakActive(true);
+      void requestCrazyGamesMidgameAd().finally(() => setAdBreakActive(false));
+    }
+  }, [selectedArena]);
+  const onWaveComplete = useCallback((completion: WaveCompletion) => {
+    trackWaveCompleted({
+      mode: completion.mode,
+      arena: selectedArena,
+      wave: completion.wave,
+      score: completion.score,
+      lives: completion.livesRemaining,
+      elapsedSeconds: Number(completion.elapsedSeconds.toFixed(1)),
+    });
+    crazyGamesReportProgress(completion.wave);
+    crazyGamesGameplayStop();
+    window.setTimeout(() => crazyGamesGameplayStart({
+      mode: completion.mode,
+      arena: selectedArena,
+      wave: completion.wave + 1,
+    }), 0);
+  }, [selectedArena]);
   const onPlayerDamage = useCallback(() => setDamagePulse((current) => current + 1), []);
   const onPlayerFlash = useCallback(() => setFlashPulse((current) => current + 1), []);
   const onGenerationComplete = useCallback((record: GenerationRecord) => {
@@ -63,9 +122,14 @@ export default function App() {
     setEvolutionArchive((current) => appendGenerationRecord(current, activeEvolutionRun.current!, record));
   }, []);
   const selectMode = (mode: CombatMode) => {
+    trackModeSelected(mode);
     setSelectedMode(mode);
     setHud(initialHudForMode(mode));
   };
+
+  useEffect(() => {
+    crazyGamesLoadingComplete();
+  }, []);
 
   useEffect(() => {
     if (DEVELOPMENT_TELEMETRY) {
@@ -85,6 +149,17 @@ export default function App() {
     setDamagePulse(0);
     setFlashPulse(0);
     setRunId((current) => current + 1);
+    runStartedAt.current = performance.now();
+    trackGameStarted({
+      mode: selectedMode,
+      arena: selectedArena,
+      wave: 1,
+    });
+    crazyGamesGameplayStart({
+      mode: selectedMode,
+      arena: selectedArena,
+      wave: 1,
+    });
     setStarted(true);
     setShowBrief(false);
   };
@@ -112,11 +187,19 @@ export default function App() {
         active={started}
         onHud={onHud}
         onGameOver={onGameOver}
+        onWaveComplete={onWaveComplete}
         onPlayerDamage={onPlayerDamage}
         onPlayerFlash={onPlayerFlash}
         onGenerationComplete={onGenerationComplete}
       />
       <SupportDevelopment />
+      <AnalyticsConsent />
+      {adBreakActive && (
+        <div className="platform-break" data-game-ui role="status" aria-live="polite">
+          <span>PLATFORM BREAK</span>
+          <strong>PREPARING NEXT DEPLOYMENT…</strong>
+        </div>
+      )}
       <div className="vignette" />
       <div key={`damage-${damagePulse}`} className={`damage-flash ${damagePulse > 0 ? 'hit' : ''}`} />
       <div key={`flash-${flashPulse}`} className={`enemy-flash ${flashPulse > 0 ? 'hit' : ''}`} />
@@ -235,7 +318,10 @@ export default function App() {
                     role="radio"
                     aria-checked={selectedArena === arena.id}
                     className={`arena-card ${selectedArena === arena.id ? 'selected' : ''}`}
-                    onClick={() => setSelectedArena(arena.id)}
+                    onClick={() => {
+                      trackArenaSelected(arena.id);
+                      setSelectedArena(arena.id);
+                    }}
                   >
                     <span className={`arena-preview ${arena.environment}`} aria-hidden="true"><i /><b /></span>
                     <span className="arena-copy">
