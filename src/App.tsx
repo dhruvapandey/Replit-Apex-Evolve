@@ -19,6 +19,7 @@ import {
   enemyCountForMode,
   type CombatMode,
 } from './game/combatMode';
+import { isRestartRunKey } from './game/input';
 import { SupportDevelopment } from './ui/SupportDevelopment';
 import { AnalyticsConsent } from './ui/AnalyticsConsent';
 import {
@@ -69,6 +70,10 @@ export default function App() {
   const [damagePulse, setDamagePulse] = useState(0);
   const [flashPulse, setFlashPulse] = useState(0);
   const [adBreakActive, setAdBreakActive] = useState(false);
+  const [roundOutcome, setRoundOutcome] = useState<{
+    mode: CombatMode;
+    wave: number;
+  } | null>(null);
   const [evolutionArchive, setEvolutionArchive] = useState(() => (
     DEVELOPMENT_TELEMETRY
       ? parseEvolutionArchive(localStorage.getItem(EVOLUTION_STORAGE_KEY))
@@ -76,6 +81,7 @@ export default function App() {
   ));
   const activeEvolutionRun = useRef<string | null>(null);
   const runStartedAt = useRef(0);
+  const roundOutcomeTimer = useRef<number | null>(null);
   const onHud = useCallback((next: GameHud) => setHud(next), []);
   const onGameOver = useCallback((finalHud: GameHud) => {
     const elapsedSeconds = Math.max(0, (performance.now() - runStartedAt.current) / 1000);
@@ -88,6 +94,11 @@ export default function App() {
       elapsedSeconds: Number(elapsedSeconds.toFixed(1)),
     });
     crazyGamesGameplayStop();
+    if (roundOutcomeTimer.current !== null) {
+      window.clearTimeout(roundOutcomeTimer.current);
+      roundOutcomeTimer.current = null;
+    }
+    setRoundOutcome(null);
     setStarted(false);
     if (
       isCrazyGamesActive()
@@ -107,6 +118,14 @@ export default function App() {
       lives: completion.livesRemaining,
       elapsedSeconds: Number(completion.elapsedSeconds.toFixed(1)),
     });
+    if (roundOutcomeTimer.current !== null) {
+      window.clearTimeout(roundOutcomeTimer.current);
+    }
+    setRoundOutcome({ mode: completion.mode, wave: completion.wave });
+    roundOutcomeTimer.current = window.setTimeout(() => {
+      setRoundOutcome(null);
+      roundOutcomeTimer.current = null;
+    }, 1900);
     crazyGamesReportProgress(completion.wave);
     crazyGamesGameplayStop();
     window.setTimeout(() => crazyGamesGameplayStart({
@@ -129,6 +148,11 @@ export default function App() {
 
   useEffect(() => {
     crazyGamesLoadingComplete();
+    return () => {
+      if (roundOutcomeTimer.current !== null) {
+        window.clearTimeout(roundOutcomeTimer.current);
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -137,7 +161,12 @@ export default function App() {
     }
   }, [evolutionArchive]);
 
-  const startRun = () => {
+  const startRun = useCallback(() => {
+    if (roundOutcomeTimer.current !== null) {
+      window.clearTimeout(roundOutcomeTimer.current);
+      roundOutcomeTimer.current = null;
+    }
+    setRoundOutcome(null);
     if (DEVELOPMENT_TELEMETRY && selectedMode === 'evolution') {
       const telemetryRunId = `run-${Date.now()}-${runId + 1}`;
       activeEvolutionRun.current = telemetryRunId;
@@ -162,7 +191,18 @@ export default function App() {
     });
     setStarted(true);
     setShowBrief(false);
-  };
+  }, [runId, selectedArena, selectedMode]);
+
+  useEffect(() => {
+    if (started || showBrief || adBreakActive) return;
+    const restartOnEnter = (event: KeyboardEvent) => {
+      if (!isRestartRunKey(event.code, event.repeat)) return;
+      event.preventDefault();
+      startRun();
+    };
+    window.addEventListener('keydown', restartOnEnter);
+    return () => window.removeEventListener('keydown', restartOnEnter);
+  }, [adBreakActive, showBrief, startRun, started]);
 
   const activeTacticalEffect = hud.flashEffectSeconds > 0
     ? {
@@ -203,7 +243,7 @@ export default function App() {
       <div className="vignette" />
       <div key={`damage-${damagePulse}`} className={`damage-flash ${damagePulse > 0 ? 'hit' : ''}`} />
       <div key={`flash-${flashPulse}`} className={`enemy-flash ${flashPulse > 0 ? 'hit' : ''}`} />
-      {activeTacticalEffect && (
+      {started && activeTacticalEffect && (
         <div
           className={`effect-countdown ${activeTacticalEffect.kind}`}
           role="status"
@@ -211,6 +251,13 @@ export default function App() {
         >
           <span>{activeTacticalEffect.label}</span>
           <strong>{activeTacticalEffect.seconds}</strong>
+        </div>
+      )}
+      {started && roundOutcome && (
+        <div className="round-outcome" data-game-ui role="status" aria-live="assertive">
+          <span>{roundOutcome.mode === 'duel' ? `DUEL ROUND ${roundOutcome.wave}` : `GENERATION ${roundOutcome.wave}`}</span>
+          <strong>YOU WON</strong>
+          <small>{roundOutcome.mode === 'duel' ? 'NEXT RIVAL DEPLOYING' : 'NEXT GENERATION EVOLVING'}</small>
         </div>
       )}
       <header className="combat-hud">
@@ -341,13 +388,19 @@ export default function App() {
         </section>
       )}
       {!started && !showBrief && (
-        <section className="game-over">
+        <section
+          className="game-over"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="game-over-title"
+        >
           <div className="game-over-card">
-            <p className="overline">COMBAT SYSTEM // RUN TERMINATED</p>
-            <h2>GAME OVER</h2>
+            <p className="overline">COMBAT SYSTEM // GAME OVER</p>
+            <h2 id="game-over-title">YOU LOST</h2>
             <p>All {hud.maxLives} lives lost in {hud.mode === 'duel' ? `Duel Round ${hud.wave}` : `Generation ${hud.wave}`}.</p>
             <div><span>FINAL SCORE</span><strong>{hud.score.toLocaleString()}</strong></div>
-            <button onClick={startRun}>RESTART RUN <span>→</span></button>
+            <button autoFocus onClick={startRun}>RESTART RUN <span>→</span></button>
+            <small className="restart-hint">PRESS ENTER TO RESTART</small>
           </div>
         </section>
       )}

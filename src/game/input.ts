@@ -23,3 +23,40 @@ export function tacticalLookAhead(
     z: (-pointerY / pointerDistance) * distance,
   };
 }
+
+const HELD_COMBAT_KEYS = new Set([
+  'KeyW',
+  'KeyA',
+  'KeyS',
+  'KeyD',
+  'ShiftLeft',
+  'ShiftRight',
+]);
+
+const SUPPRESSED_COMBAT_KEYS = new Set([
+  ...HELD_COMBAT_KEYS,
+  'KeyQ',
+  'KeyV',
+  'KeyC',
+  'KeyF',
+  'KeyR',
+  'KeyM',
+  // These nearby accidental keys have no combat action. Suppressing their
+  // browser defaults prevents focus from leaving the arena mid-movement.
+  'Tab',
+  'Backquote',
+  'Digit1',
+  'Digit2',
+]);
+
+export function isHeldCombatKey(code: string) {
+  return HELD_COMBAT_KEYS.has(code);
+}
+
+export function shouldSuppressCombatKey(code: string) {
+  return SUPPRESSED_COMBAT_KEYS.has(code);
+}
+
+export function isRestartRunKey(code: string, repeat: boolean) {
+  return code === 'Enter' && !repeat;
+}
