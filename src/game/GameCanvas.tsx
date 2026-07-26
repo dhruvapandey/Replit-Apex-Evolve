@@ -6,7 +6,12 @@ import {
   tankPositionBlocked,
   type ArenaObstacle,
 } from './physics';
-import { constrainTacticalPan, tacticalLookAhead } from './input';
+import {
+  constrainTacticalPan,
+  isHeldCombatKey,
+  shouldSuppressCombatKey,
+  tacticalLookAhead,
+} from './input';
 import { livesForGeneration } from './progression';
 import {
   DEPLOYMENT_SECONDS,
@@ -2519,14 +2524,30 @@ export function GameCanvas({
 
     const requestMouseCapture = async () => {
       try {
+        host.focus({ preventScroll: true });
         await host.requestPointerLock();
       } catch {
         pointerLockUnavailable = true;
       }
     };
+    const releaseHeldInput = () => {
+      keys.clear();
+      fireHeld = false;
+      mortarBurstRemaining = 0;
+    };
     const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target instanceof Element ? event.target : null;
+      if (!activeRef.current || gameEnded || target?.closest('[data-game-ui]')) {
+        releaseHeldInput();
+        return;
+      }
+      if (event.metaKey || event.ctrlKey || event.altKey) {
+        releaseHeldInput();
+        return;
+      }
+      if (shouldSuppressCombatKey(event.code)) event.preventDefault();
       combatAudio.unlock();
-      keys.add(event.code);
+      if (isHeldCombatKey(event.code)) keys.add(event.code);
       if (event.code === 'KeyM' && !event.repeat) combatAudio.toggleMuted();
       if (event.code === 'KeyV' && !event.repeat && activeRef.current) {
         cameraMode = (cameraMode + 1) % 2;
@@ -2560,7 +2581,22 @@ export function GameCanvas({
         tacticalPanZ = 0;
       }
     };
-    const onKeyUp = (event: KeyboardEvent) => keys.delete(event.code);
+    const onKeyUp = (event: KeyboardEvent) => {
+      keys.delete(event.code);
+      const target = event.target instanceof Element ? event.target : null;
+      if (
+        activeRef.current
+        && !target?.closest('[data-game-ui]')
+        && shouldSuppressCombatKey(event.code)
+      ) {
+        event.preventDefault();
+      }
+    };
+    const onWindowBlur = () => releaseHeldInput();
+    const onPageHide = () => releaseHeldInput();
+    const onVisibilityChange = () => {
+      if (document.visibilityState !== 'visible') releaseHeldInput();
+    };
     const onMouseMove = (event: MouseEvent) => {
       if (pointerLocked && cameraMode === 1) {
         aimAngle -= event.movementX * 0.0024;
@@ -2593,13 +2629,19 @@ export function GameCanvas({
         document.documentElement.style.setProperty('--aim-x', '50vw');
         document.documentElement.style.setProperty('--aim-y', '50vh');
         aimEngaged = true;
+      } else {
+        releaseHeldInput();
       }
     };
-    const onPointerLockError = () => { pointerLockUnavailable = true; };
+    const onPointerLockError = () => {
+      pointerLockUnavailable = true;
+      releaseHeldInput();
+    };
     const onMouseDown = (event: MouseEvent) => {
       if (event.button === 0) combatAudio.unlock();
       const target = event.target as Element | null;
       if (event.button !== 0 || !activeRef.current || target?.closest('[data-game-ui]')) return;
+      host.focus({ preventScroll: true });
       fireHeld = true;
       if (cameraMode === 1 && !pointerLocked && !pointerLockUnavailable) {
         void requestMouseCapture();
@@ -2614,11 +2656,14 @@ export function GameCanvas({
 
     addEventListener('keydown', onKeyDown);
     addEventListener('keyup', onKeyUp);
+    addEventListener('blur', onWindowBlur);
+    addEventListener('pagehide', onPageHide);
     host.addEventListener('mousemove', onMouseMove);
     document.addEventListener('mousedown', onMouseDown);
     document.addEventListener('mouseup', onMouseUp);
     document.addEventListener('pointerlockchange', onPointerLockChange);
     document.addEventListener('pointerlockerror', onPointerLockError);
+    document.addEventListener('visibilitychange', onVisibilityChange);
     spawnWave();
 
     let animationFrame = 0;
@@ -2755,7 +2800,7 @@ export function GameCanvas({
           generationElapsed += deltaTime;
           const forwardInput = (keys.has('KeyW') ? 1 : 0) - (keys.has('KeyS') ? 1 : 0);
           const strafeInput = (keys.has('KeyD') ? 1 : 0) - (keys.has('KeyA') ? 1 : 0);
-          const boost = keys.has('ShiftLeft') ? 1.65 : 1;
+          const boost = keys.has('ShiftLeft') || keys.has('ShiftRight') ? 1.65 : 1;
           const movement = cameraMode === 0
             ? movementScratch.set(strafeInput, 0, -forwardInput)
             : movementScratch.set(
@@ -3364,8 +3409,10 @@ export function GameCanvas({
 
           if (lives <= 0 && !gameEnded) {
             gameEnded = true;
-            fireHeld = false;
-            mortarBurstRemaining = 0;
+            releaseHeldInput();
+            if (document.pointerLockElement === host) {
+              document.exitPointerLock();
+            }
             removeShots();
             createExplosion(player.position, 0xffffff);
             combatAudio.play('tank-destroyed', 1);
@@ -3676,12 +3723,16 @@ export function GameCanvas({
       cancelAnimationFrame(animationFrame);
       removeEventListener('keydown', onKeyDown);
       removeEventListener('keyup', onKeyUp);
+      removeEventListener('blur', onWindowBlur);
+      removeEventListener('pagehide', onPageHide);
       removeEventListener('resize', resize);
       host.removeEventListener('mousemove', onMouseMove);
       document.removeEventListener('mousedown', onMouseDown);
       document.removeEventListener('mouseup', onMouseUp);
       document.removeEventListener('pointerlockchange', onPointerLockChange);
       document.removeEventListener('pointerlockerror', onPointerLockError);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      releaseHeldInput();
       if (document.pointerLockElement === host) document.exitPointerLock();
       document.documentElement.style.removeProperty('--aim-x');
       document.documentElement.style.removeProperty('--aim-y');
@@ -3704,5 +3755,12 @@ export function GameCanvas({
     onWaveComplete,
   ]);
 
-  return <div ref={mount} className="game-canvas" aria-label="APEX EVOLVE 3D combat arena" />;
+  return (
+    <div
+      ref={mount}
+      className="game-canvas"
+      aria-label="APEX EVOLVE 3D combat arena"
+      tabIndex={-1}
+    />
+  );
 }
